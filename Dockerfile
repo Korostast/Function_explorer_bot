@@ -1,29 +1,26 @@
-FROM python:3.10
+FROM python:3.10-slim
 
 # Set a time zone (can't be done automatically, lol)
 ENV TZ=Europe/Moscow
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Pull newest versions of packages
-RUN apt-get update && apt-get upgrade -y
-
-# Install latex-distribution and its dependencies
-RUN apt-get install texlive -y
-RUN apt-get install texlive-latex-extra -y
-RUN apt-get install dvipng -y
-RUN apt-get install texlive-lang-cyrillic
+# Pull newest versions of packages and install latex-distribution and its dependencies
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install texlive -y &&  \
+    apt-get install texlive-latex-extra -y && \
+    apt-get install dvipng -y && \
+    apt-get install texlive-lang-cyrillic
 
 # Create working directory
 RUN mkdir -p /usr/src/app/
 WORKDIR /usr/src/app/
 ENV PYTHONPATH="$PYTHONPATH:/usr/src/app/"
 
-# Install project requirements
-ADD ./requirements.txt /usr/src/app/
-RUN pip install -r requirements.txt
+# Prepare application to start: Install project requirements and compile translations
 ADD . /usr/src/app/
-RUN rm ~/.cache/matplotlib -fr
-RUN pybabel compile -d locales -D bot
+RUN pip install -r requirements.txt && \
+    rm ~/.cache/matplotlib -fr && \
+    pybabel compile -d locales -D bot
 
 # Run bot
 CMD [ "python", "source/core/bot.py" ]
