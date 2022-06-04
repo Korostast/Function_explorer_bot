@@ -1,6 +1,7 @@
 """
 Parser for graph requests
 """
+import multiprocessing
 import re
 from tokenize import TokenError
 
@@ -185,7 +186,7 @@ class GraphParser(Parser):
 
         return function
 
-    def _process_function(self, token: str, lang: str = "en") -> sy.Function:
+    def _process_function(self, token: str, lang: str = "en", q=None) -> None:
         """
         Converting a string into a sympy function
         :param lang:
@@ -203,10 +204,11 @@ class GraphParser(Parser):
                 # If there is only 'y' variable, then we can't understand what we should draw, because it is impossible
                 # to change axes in plot in our case
                 if function.free_symbols == {sy.Symbol('y')}:
-                    raise ParseError(_("Incorrect expression: {}\n"
+                    q.put(ParseError(_("Incorrect expression: {}\n"
                                        "There is only 'y' variable. It's f(y) or f(x) = 0?\n"
                                        "Please, use 'x' instead of single 'y' variable for f(x) plot.",
-                                       locale=lang).format(token))
+                                       locale=lang).format(token)))
+                    return
             elif parts_count == 2:
                 # If parsed result always true or false (e.g. it is not a function at all)
                 result = sy.Eq(sy.parse_expr(expr_parts[0], transformations=rules),
@@ -215,11 +217,12 @@ class GraphParser(Parser):
                 # Check if number of variables is less than 2
                 if len(result.free_symbols) > 2:
                     variables = ', '.join(str(var) for var in result.free_symbols)
-                    raise ParseError(_("Incorrect expression: {}\nThere are {} variables: {}\n"
+                    q.put(ParseError(_("Incorrect expression: {}\nThere are {} variables: {}\n"
                                        "You can use a maximum of 2 variables.",
                                        locale=lang).format(token,
                                                            len(result.free_symbols),
-                                                           variables))
+                                                           variables)))
+                    return
 
                 # If it is expressions like 1 = 1 or 1 = 0
                 if result is sy.true or result is sy.false:
@@ -236,21 +239,31 @@ class GraphParser(Parser):
                     function = sy.Eq(sy.parse_expr(modified_expr, transformations=rules), 0)
 
             else:
-                raise ParseError(_("Mistake in implicit function: found more than 1 equal sign.\n"
+                q.put(ParseError(_("Mistake in implicit function: found more than 1 equal sign.\n"
                                    "Your input: {}\n"
-                                   "Please, check your math formula", locale=lang).format(token.strip()))
+                                   "Please, check your math formula", locale=lang).format(token.strip())))
+                return
 
             # Change variables
             function = self._process_variables(function, lang)
-        except (SympifyError, TypeError, ValueError, AttributeError, TokenError) as err:
-            raise ParseError(_("Mistake in expression.\nYour input: {}\n"
-                               "Please, check your math formula.", locale=lang).format(token.strip())) from err
-        except SyntaxError as err:
-            raise ParseError(_("Couldn't make out the expression.\nYour input: {}\nTry using a stricter syntax, "
+        except (SympifyError, TypeError, ValueError, AttributeError, TokenError):
+            q.put(ParseError(_("Mistake in expression.\nYour input: {}\n"
+                               "Please, check your math formula.", locale=lang).format(token.strip())))
+            return
+        except SyntaxError:
+            q.put(ParseError(_("Couldn't make out the expression.\nYour input: {}\nTry using a stricter syntax, "
                                "such as placing '*' (multiplication) signs and parentheses.",
-                               locale=lang).format(token.strip())) from err
+                               locale=lang).format(token.strip())))
+            return
 
-        return function
+        # Check function length
+        if len(str(function)) > Parser.FUNCTION_LENGTH_LIMIT:
+            q.put(ParseError(_("One of the functions is too long.\nYour input: {}\nSorry for this limitation.",
+                               locale=lang).format(str(token))))
+            return
+
+        q.put(function)
+        q.put(self.warnings)
 
     @run_asynchronously
     def parse(self, query: str, lang: str = "en"):
@@ -274,14 +287,23 @@ class GraphParser(Parser):
                 continue
 
             # If it is a function
-            try:
-                function = self._process_function(token, lang)
-            except ParseError as err:
+            q = multiprocessing.Queue()
+            p = multiprocessing.Process(target=self._process_function, args=(token, lang, q))
+            p.start()
+            p.join(5)
+            if p.is_alive():
+                p.terminate()
+                return None
+
+            function = q.get()
+            if not q.empty():
+                self.warnings = q.get()
+            if isinstance(function, Exception):
                 # If we don't found a pattern, and it is not a function, then try to fix words
                 if self._find_pattern(pattern_dict, token, True, lang):
                     continue
 
-                raise err
+                raise function
 
             # Next complex check finds expressions like "x = 1".
             # They should be implicit because of sympy specifics
@@ -306,3 +328,5 @@ class GraphParser(Parser):
         if (functions_count := len(self.tokens["explicit"]) + len(self.tokens["implicit"])) > self.FUNCTIONS_LIMIT:
             raise ParseError(_("Too many functions requested ({}). "
                                "The limit is {} functions.", locale=lang).format(functions_count, self.FUNCTIONS_LIMIT))
+
+        return True

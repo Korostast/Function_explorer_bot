@@ -23,6 +23,9 @@ class Parser(ABC):
     # The accuracy of the prediction system. The bigger the number, the more similar the words need to be to correct it
     PREDICTION_ACCURACY = 0.7
 
+    # Limitation on length of the function
+    FUNCTION_LENGTH_LIMIT = 800
+
     def __init__(self):
         self._warnings = []
 
@@ -56,6 +59,10 @@ class Parser(ABC):
         :return: warnings as a list
         """
         return self._warnings
+
+    @warnings.setter
+    def warnings(self, value):
+        self._warnings = value
 
     def clear_warnings(self):
         """

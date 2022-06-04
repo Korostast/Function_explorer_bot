@@ -21,6 +21,9 @@
     "patterns": {
       "^(domain|definition[ ]+(area|range))[ ]+(of[ ]+)?((a|the)[ ]+)?(function[ ]+)?(.+)$": [
         "7"
+      ],
+      "^area([ ]+of)?[ ]+definition[ ]+(of[ ]+)?((a|the)[ ]+)?(function[ ]+)?(.+)$": [
+        "6"
       ]
     },
     "keywords": [
@@ -120,19 +123,6 @@
       "function",
       "concave",
       "concavity"
-    ]
-  },
-  "continuity": {
-    "patterns": {
-      "^continu(ity|ous)[ ]+(of[ ]+)?((a|the)[ ]+)?(function[ ]+)?(.+)$": [
-        "6"
-      ]
-    },
-    "keywords": [
-      "the",
-      "function",
-      "continuity",
-      "continuous"
     ]
   },
   "vertical asymptotes": {
