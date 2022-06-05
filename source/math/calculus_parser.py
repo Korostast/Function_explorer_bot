@@ -170,7 +170,9 @@ class CalculusParser(Parser):
         NL = r"\\"  # New Line
         NLC = r":\\"  # New Line with Colon
         SPACE = r"\ "  # Space in LaTeX format
-        __ = lambda s: sy.latex(_(s))  # Translate and make latex
+
+        def __(s):  # Translate and make latex
+            return sy.latex(_(s))
 
         match pattern_set:
             case "derivative":

@@ -28,7 +28,6 @@ class LanguageMiddleware(I18nMiddleware):
         super().__init__(domain, path=path)
         self.mongo = mongo
 
-    # pylint: disable=no-self-use
     async def get_user_locale(self, action: str, args: Tuple[Any]) -> Optional[str]:
         """
         Request user's language code from database if it exists. If it doesn't exist, then returns default ("en")
